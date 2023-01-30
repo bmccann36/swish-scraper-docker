@@ -85,6 +85,7 @@ Resources:
     Type: AWS::ECS::TaskDefinition
     Properties:
       ExecutionRoleArn: !GetAtt ECSTaskExecutionRole.Arn
+      TaskRoleArn: !GetAtt TaskRole.Arn
       RequiresCompatibilities:
         - "FARGATE"
       Cpu: 512
@@ -104,14 +105,16 @@ Resources:
           Environment:
             - Name: TABLE_NAME
               Value: 'swish-house-class-dates'
+            - Name: TWILIO_AUTH_TOKEN
+              Value: '{{resolve:secretsmanager:swishScraperSecret:SecretString:TWILIO_AUTH_TOKEN}}'
+            - Name: TWILIO_ACCT_ID
+              Value: '{{resolve:secretsmanager:swishScraperSecret:SecretString:TWILIO_ACCT_ID}}'
           PortMappings:
             - ContainerPort: 80
               HostPort: 80
               Protocol: tcp
           Essential: true
-#          EntryPoint: [ "sh", "-c" ]
-#          Command:
-#            - /bin/sh -c "echo 'Hello from AWS Step Functions!'"
+
 
   ECSTaskExecutionRole:
     Type: AWS::IAM::Role
@@ -139,6 +142,27 @@ Resources:
                   - 'logs:PutLogEvents'
                   - 'logs:CreateLogGroup'
                 Resource: '*'
+
+  TaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: dynamodb-table-access
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:BatchGetItem
+                  - dynamodb:BatchWriteItem
+                  - dynamodb:GetItem
+                Resource:
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/swish-house-class-dates'
 
   VPC:
     Type: AWS::EC2::VPC
