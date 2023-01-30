@@ -4,6 +4,14 @@ Description: uses step function to trigger an ECS task on a schedule
 
 Resources:
 
+  DynamoTable:
+    Type: AWS::Serverless::SimpleTable
+    Properties:
+      PrimaryKey:
+        Name: class_date
+        Type: String
+      TableName: swish-house-class-dates
+
   ECSTaskNotificationStateMachine:
     Type: AWS::Serverless::StateMachine
     Properties:
@@ -13,7 +21,7 @@ Resources:
         CronTimer:
           Type: ScheduleV2
           Properties:
-            ScheduleExpression: cron(0/10 11-24 ? * * *)
+            ScheduleExpression: cron(0/10 11-23 ? * * *)
       DefinitionSubstitutions:
         snsTopicArn: !Ref SNSTopic
         ecsClusterArn: !GetAtt ECSCluster.Arn
@@ -83,7 +91,7 @@ Resources:
       Memory: 1024
       NetworkMode: awsvpc
       ContainerDefinitions:
-        - Image: "public.ecr.aws/amazonlinux/amazonlinux:latest"
+        - Image: "657117174612.dkr.ecr.us-east-1.amazonaws.com/swishscraper:latest"
           Name: "swish-scraper"
           # CREATES LOG GROUP
           LogConfiguration:
@@ -101,9 +109,9 @@ Resources:
               HostPort: 80
               Protocol: tcp
           Essential: true
-          EntryPoint: [ "sh", "-c" ]
-          Command:
-            - /bin/sh -c "echo 'Hello from AWS Step Functions!'"
+#          EntryPoint: [ "sh", "-c" ]
+#          Command:
+#            - /bin/sh -c "echo 'Hello from AWS Step Functions!'"
 
   ECSTaskExecutionRole:
     Type: AWS::IAM::Role
