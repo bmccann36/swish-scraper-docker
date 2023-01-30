@@ -1,50 +1,14 @@
 {
-  "Comment": "An example of the Amazon States Language for notification on an AWS Fargate task completion",
-  "StartAt": "Run Fargate Task",
-  "TimeoutSeconds": 3600,
+  "Comment": "A description of my state machine",
+  "StartAt": "ECS RunTask",
   "States": {
-    "Run Fargate Task": {
+    "ECS RunTask": {
       "Type": "Task",
-      "Resource": "arn:${AWS::Partition}:states:::ecs:runTask.sync",
+      "Resource": "arn:aws:states:::ecs:runTask.sync",
       "Parameters": {
         "LaunchType": "FARGATE",
-        "Cluster": "${ecsClusterArn}",
-        "TaskDefinition": "${ecsTaskDefinitionArn}",
-        "NetworkConfiguration": {
-          "AwsvpcConfiguration": {
-            "Subnets": [
-              "${subnetAz1}",
-              "${subnetAz2}"
-            ],
-            "AssignPublicIp": "ENABLED"
-          }
-        }
-      },
-      "Next": "Notify Success",
-      "Catch": [
-        {
-          "ErrorEquals": [
-            "States.ALL"
-          ],
-          "Next": "Notify Failure"
-        }
-      ]
-    },
-    "Notify Success": {
-      "Type": "Task",
-      "Resource": "arn:${AWS::Partition}:states:::sns:publish",
-      "Parameters": {
-        "Message": "AWS Fargate Task started by Step Functions succeeded",
-        "TopicArn": "${snsTopicArn}"
-      },
-      "End": true
-    },
-    "Notify Failure": {
-      "Type": "Task",
-      "Resource": "arn:${AWS::Partition}:states:::sns:publish",
-      "Parameters": {
-        "Message": "AWS Fargate Task started by Step Functions failed",
-        "TopicArn": "${snsTopicArn}"
+        "Cluster": "arn:aws:ecs:us-east-1:657117174612:cluster/swish-scraper-ECSCluster-IKUfazsIrhzo",
+        "TaskDefinition": "arn:aws:ecs:us-east-1:657117174612:task-definition/swish-scraper-ECSTaskDefinition-PjC8v0pYMIyz:1"
       },
       "End": true
     }

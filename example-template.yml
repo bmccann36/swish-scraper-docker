@@ -1,9 +1,7 @@
+---
 AWSTemplateFormatVersion: 2010-09-09
-Transform: AWS::Serverless-2016-10-31
-Description: uses step function to trigger an ECS task on a schedule
-
+Description: AWS Step Functions sample project for getting notified on AWS Fargate task completion
 Resources:
-
   ECSTaskNotificationStateMachine:
     Type: AWS::StepFunctions::StateMachine
     Properties:
@@ -61,9 +59,7 @@ Resources:
               }
             }
           }
-        - { snsTopicArn: !Ref SNSTopic, ecsClusterArn: !GetAtt ECSCluster.Arn, ecsTaskDefinitionArn: !Ref ECSTaskDefinition, subnetAz1: !Ref PubSubnetAz1, subnetAz2: !Ref PubSubnetAz2 }
-
-  #! role that state machine uses
+        - {snsTopicArn: !Ref SNSTopic, ecsClusterArn: !GetAtt ECSCluster.Arn, ecsTaskDefinitionArn: !Ref ECSTaskDefinition, subnetAz1: !Ref PubSubnetAz1, subnetAz2: !Ref PubSubnetAz2}
   ECSRunTaskSyncExecutionRole:
     Type: "AWS::IAM::Role"
     Properties:
@@ -102,19 +98,13 @@ Resources:
                   - "events:DescribeRule"
                 Resource:
                   - !Sub "arn:${AWS::Partition}:events:${AWS::Region}:${AWS::AccountId}:rule/StepFunctionsGetEventsForECSTaskRule"
-
-              - Effect: Allow
-                Action:
-                  - "iam:PassRole"
-                Resource: "*"
-
   SNSTopic:
     Type: AWS::SNS::Topic
     Properties:
       KmsMasterKeyId: !Ref SNSKeyAlias
 
   SNSKey:
-    DeletionPolicy: Retain
+    DeletionPolicy : Retain
     Type: AWS::KMS::Key
     Properties:
       Enabled: true
@@ -138,8 +128,8 @@ Resources:
             "Resource": "*",
             "Condition": {
               "StringEquals": {
-                "kms:ViaService": { "Fn::Join": [ ".",[ "sns","Ref": "AWS::Region","amazonaws.com" ] ] },
-                "kms:CallerAccount": { "Ref": "AWS::AccountId" }
+                "kms:ViaService":  { "Fn::Join": [".",["sns","Ref" : "AWS::Region","amazonaws.com"]]},
+                "kms:CallerAccount": { "Ref" : "AWS::AccountId" }
               }
             }
           },
@@ -147,7 +137,7 @@ Resources:
             "Sid": "Allow direct access to key metadata to the account",
             "Effect": "Allow",
             "Principal": {
-              "AWS": { "Fn::Join": [ ":",[ "arn:aws:iam:","Ref": "AWS::AccountId","root" ] ] }
+              "AWS": {"Fn::Join": [":",["arn:aws:iam:","Ref" : "AWS::AccountId","root"]]}
             },
             "Action": [
               "kms:*"
@@ -162,76 +152,32 @@ Resources:
       - SNSKey
     Type: AWS::KMS::Alias
     Properties:
-      AliasName: !Join [ "", [ 'alias/Stack-',!Ref AWS::StackName,'/sns-key' ] ]
+      AliasName: !Join ["", ['alias/Stack-',!Ref AWS::StackName,'/sns-key']]
       TargetKeyId:
         Ref: SNSKey
-
   ECSCluster:
     Type: AWS::ECS::Cluster
-
-  #! ecs task def
   ECSTaskDefinition:
     Type: AWS::ECS::TaskDefinition
     Properties:
-      ExecutionRoleArn: !GetAtt ECSTaskExecutionRole.Arn
       RequiresCompatibilities:
         - "FARGATE"
-      Cpu: 512
-      Memory: 1024
+      Cpu: 256
+      Memory: 512
       NetworkMode: awsvpc
       ContainerDefinitions:
         - Image: "public.ecr.aws/amazonlinux/amazonlinux:latest"
-          Name: "swish-scraper"
-          # CREATES LOG GROUP
-          LogConfiguration:
-            LogDriver: awslogs
-            Options:
-              awslogs-create-group: 'true'
-              awslogs-group: awslogs-swish-scraper
-              awslogs-region: !Ref "AWS::Region"
-              awslogs-stream-prefix: awslogs-swish-scraper
-          Environment:
-            - Name: TABLE_NAME
-              Value: 'swish-house-class-dates'
+          Name: "fargate-app"
           PortMappings:
             - ContainerPort: 80
               HostPort: 80
               Protocol: tcp
           Essential: true
-          EntryPoint: [ "sh", "-c" ]
+          EntryPoint:
+            - sh
+            - "-c"
           Command:
             - /bin/sh -c "echo 'Hello from AWS Step Functions!'"
-
-  ECSTaskExecutionRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: [ ecs-tasks.amazonaws.com ]
-            Action: [ 'sts:AssumeRole' ]
-      Path: /
-      Policies:
-        - PolicyName: AmazonECSTaskExecutionRolePolicy
-          PolicyDocument:
-            Statement:
-              - Effect: Allow
-                Action:
-                  # Allow the ECS Tasks to download images from ECR
-                  - "ecr:GetAuthorizationToken"
-                  - "ecr:BatchCheckLayerAvailability"
-                  - "ecr:GetDownloadUrlForLayer"
-                  - "ecr:BatchGetImage"
-
-                  # Allow the ECS tasks to upload logs to CloudWatch
-                  - 'logs:CreateLogStream'
-                  - 'logs:PutLogEvents'
-                  - 'logs:CreateLogGroup'
-                Resource: '*'
-
-
-
   VPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -248,7 +194,8 @@ Resources:
           - 0
           - Fn::GetAZs: ""
       Tags:
-        - Key: "Name"
+        -
+          Key: "Name"
           Value: !Join [ "/", [ !Ref ECSCluster , 'Public' ] ]
   PubSubnetAz2:
     Type: AWS::EC2::Subnet
@@ -260,7 +207,8 @@ Resources:
           - 0
           - Fn::GetAZs: ""
       Tags:
-        - Key: "Name"
+        -
+          Key: "Name"
           Value: !Join [ "/", [ !Ref ECSCluster , 'Public' ] ]
   InternetGateway:
     Type: AWS::EC2::InternetGateway
@@ -296,20 +244,10 @@ Resources:
       GroupDescription: ECS Allowed Ports
       VpcId: !Ref VPC
 Outputs:
-  #  StateMachineArn:
-  #    Value: !Ref ECSTaskNotificationStateMachine
+  StateMachineArn:
+    Value: !Ref ECSTaskNotificationStateMachine
   ExecutionInput:
     Description: Sample input to StartExecution.
     Value:
       >
       {}
-  Topic:
-    Value: !Ref SNSTopic
-  Cluster:
-    Value: !GetAtt ECSCluster.Arn
-  TaskDef:
-    Value: !Ref ECSTaskDefinition
-  Subnet1:
-    Value: !Ref PubSubnetAz1
-  Subnet2:
-    Value: !Ref PubSubnetAz2
