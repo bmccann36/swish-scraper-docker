@@ -13,7 +13,7 @@ Resources:
         CronTimer:
           Type: ScheduleV2
           Properties:
-            ScheduleExpression: cron(0/10 10-14 ? * * *)
+            ScheduleExpression: cron(0/10 11-24 ? * * *)
       DefinitionSubstitutions:
         snsTopicArn: !Ref SNSTopic
         ecsClusterArn: !GetAtt ECSCluster.Arn
