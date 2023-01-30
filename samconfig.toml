@@ -1,0 +1,10 @@
+version = 0.1
+[default]
+[default.deploy]
+[default.deploy.parameters]
+stack_name = "swish-scraper"
+s3_bucket = "aws-sam-cli-managed-default-samclisourcebucket-1w0dulj9e1f4f"
+s3_prefix = "swish-scraper"
+region = "us-east-1"
+capabilities = "CAPABILITY_IAM"
+image_repositories = []
