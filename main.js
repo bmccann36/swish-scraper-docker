@@ -5,7 +5,7 @@ import { DynamoDBClient, GetItemCommand, BatchWriteItemCommand } from '@aws-sdk/
 const dynamoClient = new DynamoDBClient({})
 
 import twilio from 'twilio'
-// const twilioClient = twilio(process.env.TWILIO_ACCT_ID, process.env.TWILIO_AUTH_TOKEN)
+const twilioClient = twilio(process.env.TWILIO_ACCT_ID, process.env.TWILIO_AUTH_TOKEN)
 
 let FOUND_NEW_CLASSES = false
 
@@ -18,27 +18,28 @@ const sorted = dates.sort((a, b) => new Date(b).getTime() - new Date(a).getTime(
 const latest = sorted[0]
 console.log('>>latest', latest)
 
-// const existsInTable = await findDynamoEntry(latest)
+const existsInTable = await findDynamoEntry(latest)
+
 //? SEND SMS
-// if (!existsInTable) {
-//     console.log('!! new classes are available !!')
-//     FOUND_NEW_CLASSES = true
+if (!existsInTable) {
+    console.log('!! new classes are available !!')
+    FOUND_NEW_CLASSES = true
 
-//     const smsRes = await twilioClient.messages.create(
-//         { body: `new class available on ${latest}`, from: "+18444741202", to: "+16072675548" }
-//     )
-//     console.log('twilio send status: ', smsRes.status)
+    const smsRes = await twilioClient.messages.create(
+        { body: `new class available on ${latest}`, from: "+18444741202", to: "+16072675548" }
+    )
+    console.log('twilio send status: ', smsRes.status)
 
-// }// no new classes case
-// else {
-//     console.log('no new classes available :( ')
-// }
+}// no new classes case
+else {
+    console.log('no new classes available :( ')
+}
 
 //? WRITE NEW STUFF TO DYNAMO
-// if (FOUND_NEW_CLASSES) {
-//     console.log('updating dynamo table with latest dates')
-//     await writeDatesDynamo(sorted)
-// }
+if (FOUND_NEW_CLASSES) {
+    console.log('updating dynamo table with latest dates')
+    await writeDatesDynamo(sorted)
+}
 
 process.exit(0)
 
@@ -116,5 +117,5 @@ async function writeDatesDynamo(dateStringArr) {
         // ReturnConsumedCapacity: 'TOTAL',
     }
     const response = await dynamoClient.send(new BatchWriteItemCommand(params))
-    console.log(response)
+    console.log(response.$metadata)
 }

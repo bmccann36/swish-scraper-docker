@@ -1,0 +1,220 @@
+AWSTemplateFormatVersion: 2010-09-09
+Transform: AWS::Serverless-2016-10-31
+Description: uses step function to trigger an ECS task on a schedule
+
+Resources:
+
+  DynamoTable:
+    Type: AWS::Serverless::SimpleTable
+    Properties:
+      PrimaryKey:
+        Name: class_date
+        Type: String
+      TableName: swish-house-class-dates
+
+  ECSTaskNotificationStateMachine:
+    Type: AWS::Serverless::StateMachine
+    Properties:
+      Role: !GetAtt [ ECSRunTaskSyncExecutionRole, Arn ]
+      DefinitionUri: state-machine.asl.json
+      Events:
+        CronTimer:
+          Type: ScheduleV2
+          Properties:
+            ScheduleExpression: cron(0/10 11-23 ? * * *)
+      DefinitionSubstitutions:
+        snsTopicArn: !Ref SNSTopic
+        ecsClusterArn: !GetAtt ECSCluster.Arn
+        ecsTaskDefinitionArn: !Ref ECSTaskDefinition
+        subnetAz1: !Ref PubSubnetAz1
+        subnetAz2: !Ref PubSubnetAz2
+
+  #! role that state machine uses
+  ECSRunTaskSyncExecutionRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: states.amazonaws.com
+            Action: "sts:AssumeRole"
+      Path: "/"
+      Policies:
+        - PolicyName: FargateTaskNotificationAccessPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "sns:Publish"
+                Resource:
+                  - !Ref SNSTopic
+              - Effect: Allow
+                Action:
+                  - "ecs:RunTask"
+                Resource:
+                  - !Ref ECSTaskDefinition
+              - Effect: Allow
+                Action:
+                  - "ecs:StopTask"
+                  - "ecs:DescribeTasks"
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - "events:PutTargets"
+                  - "events:PutRule"
+                  - "events:DescribeRule"
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:events:${AWS::Region}:${AWS::AccountId}:rule/StepFunctionsGetEventsForECSTaskRule"
+
+              - Effect: Allow
+                Action:
+                  - "iam:PassRole"
+                Resource: "*"
+
+  SNSTopic:
+    Type: AWS::SNS::Topic
+
+  ECSCluster:
+    Type: AWS::ECS::Cluster
+
+  #! ecs task def
+  ECSTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      ExecutionRoleArn: !GetAtt ECSTaskExecutionRole.Arn
+      RequiresCompatibilities:
+        - "FARGATE"
+      Cpu: 512
+      Memory: 1024
+      NetworkMode: awsvpc
+      ContainerDefinitions:
+        - Image: "657117174612.dkr.ecr.us-east-1.amazonaws.com/swishscraper:latest"
+          Name: "swish-scraper"
+          # CREATES LOG GROUP
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-create-group: 'true'
+              awslogs-group: awslogs-swish-scraper
+              awslogs-region: !Ref "AWS::Region"
+              awslogs-stream-prefix: awslogs-swish-scraper
+          Environment:
+            - Name: TABLE_NAME
+              Value: 'swish-house-class-dates'
+          PortMappings:
+            - ContainerPort: 80
+              HostPort: 80
+              Protocol: tcp
+          Essential: true
+#          EntryPoint: [ "sh", "-c" ]
+#          Command:
+#            - /bin/sh -c "echo 'Hello from AWS Step Functions!'"
+
+  ECSTaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [ ecs-tasks.amazonaws.com ]
+            Action: [ 'sts:AssumeRole' ]
+      Path: /
+      Policies:
+        - PolicyName: AmazonECSTaskExecutionRolePolicy
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  #* Allow the ECS Tasks to download images from ECR
+                  - "ecr:GetAuthorizationToken"
+                  - "ecr:BatchCheckLayerAvailability"
+                  - "ecr:GetDownloadUrlForLayer"
+                  - "ecr:BatchGetImage"
+                  #* Allow the ECS tasks to upload logs to CloudWatch
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                  - 'logs:CreateLogGroup'
+                Resource: '*'
+
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+  PubSubnetAz1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.0.0/24
+      AvailabilityZone:
+        Fn::Select:
+          - 0
+          - Fn::GetAZs: ""
+      Tags:
+        - Key: "Name"
+          Value: !Join [ "/", [ !Ref ECSCluster , 'Public' ] ]
+  PubSubnetAz2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone:
+        Fn::Select:
+          - 0
+          - Fn::GetAZs: ""
+      Tags:
+        - Key: "Name"
+          Value: !Join [ "/", [ !Ref ECSCluster , 'Public' ] ]
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+  RouteViaIgw:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+  PublicRouteViaIgw:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref RouteViaIgw
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+  PubSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PubSubnetAz1
+      RouteTableId: !Ref RouteViaIgw
+  PubSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PubSubnetAz2
+      RouteTableId: !Ref RouteViaIgw
+  ECSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: ECS Allowed Ports
+      VpcId: !Ref VPC
+
+
+Outputs:
+  StateMachineArn:
+    Value: !Ref ECSTaskNotificationStateMachine
+  Topic:
+    Value: !Ref SNSTopic
+  Cluster:
+    Value: !GetAtt ECSCluster.Arn
+  TaskDef:
+    Value: !Ref ECSTaskDefinition
+  Subnet1:
+    Value: !Ref PubSubnetAz1
+  Subnet2:
+    Value: !Ref PubSubnetAz2
