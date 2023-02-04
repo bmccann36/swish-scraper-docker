@@ -21,7 +21,8 @@ Resources:
         CronTimer:
           Type: ScheduleV2
           Properties:
-            ScheduleExpression: cron(0/10 11-23 ? * * *)
+            # runs at 6am, 12pm, & 10pm EST
+            ScheduleExpression: cron(0 0,11,17 ? * * *)
       DefinitionSubstitutions:
         snsTopicArn: !Ref SNSTopic
         ecsClusterArn: !GetAtt ECSCluster.Arn

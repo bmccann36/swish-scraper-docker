@@ -20,7 +20,7 @@ Run the following command to push this image to your newly created AWS repositor
 docker push 657117174612.dkr.ecr.us-east-1.amazonaws.com/swishscraper:latest
 ```
 
-## making x86_64 build on mac (doesn't really work)
+## making x86_64 build on mac (doesn't actually work)  ¯\_(ツ)_/¯
 
 docker buildx build --platform linux/amd64 --load -t swish-scraper .
 docker run --platform linux/amd64 swish-scraper
